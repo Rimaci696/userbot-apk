@@ -6,7 +6,7 @@ import sys
 import requests
 import urllib.parse
 from datetime import datetime, timedelta
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, errors
 from telethon.tl.functions.messages import DeleteHistoryRequest
 from gtts import gTTS
 
@@ -14,10 +14,14 @@ from gtts import gTTS
 API_ID = 2040
 API_HASH = "b18441a1ff607e10a989891a5462e627"
 CONFIG_PATH = "/storage/emulated/0/userbot_config.json"
+LOG_PATH = "/storage/emulated/0/userbot_log.txt"
 # --------------------------------
 
+def log(msg):
+    with open(LOG_PATH, "a") as f:
+        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+
 def ensure_mistral():
-    """Устанавливает mistralai если её нет"""
     try:
         from mistralai import Mistral
         return True
@@ -43,46 +47,46 @@ def save_config(key):
 
 config = load_config()
 MISTRAL_KEY = config.get("mistral_key", "")
+PHONE = config.get("phone", "")
 
 muted_users = {}
 warn_limits = {}
 
-client = TelegramClient('userbot_android_session', API_ID, API_HASH)
+client = TelegramClient('/storage/emulated/0/userbot_session', API_ID, API_HASH)
 
 # === .help ===
 @client.on(events.NewMessage(pattern=r'\.help'))
 async def help_cmd(event):
     await event.delete()
     help_text = """
-<b>🚀 Список команд:</b>
+<b>Команды:</b>
 
-<b>📝 Текст и голос:</b>
+<b>Текст и голос:</b>
   <code>.txt текст</code> — анимированная печать
   <code>.voice текст</code> — голосовое сообщение
   <code>.timer N текст</code> — исчезающее сообщение
-  <code>.mock</code> — ИзДeВкА над текстом (reply)
+  <code>.mock</code> — ИзДeВкА над текстом
 
-<b>🤖 Нейросети:</b>
+<b>Нейросети:</b>
   <code>.ai вопрос</code> — Mistral AI
   <code>.draw описание</code> — рисует картинку
 
-<b>🔧 Инструменты:</b>
-  <code>.trans</code> — перевод сообщения (reply)
-  <code>.qr ссылка</code> — генератор QR-кода
-  <code>.save</code> — сохранить в Избранное (reply)
+<b>Инструменты:</b>
+  <code>.trans</code> — перевод сообщения
+  <code>.qr ссылка</code> — QR-код
+  <code>.save</code> — сохранить в Избранное
 
-<b>🛡 Модерация:</b>
-  <code>.mute N</code> — мут на N минут (reply)
-  <code>.unmute</code> — снять мут (reply)
-  <code>.warn N</code> — лимит сообщений (reply)
-  <code>.unwarn</code> — снять лимит (reply)
+<b>Модерация:</b>
+  <code>.mute N</code> — мут на N минут
+  <code>.unmute</code> — снять мут
+  <code>.warn N</code> — лимит сообщений
+  <code>.unwarn</code> — снять лимит
 
-<b>🧹 Очистка:</b>
+<b>Очистка:</b>
   <code>.panic</code> — очистить историю
-  <code>.del N</code> — удалить чат через N сек
+  <code>.del N</code> — удалить через N сек
 
-<b>⚙️ <code>.setup</code> — сменить ключ</b>
-<b>📋 <code>.help</code> — это меню</b>
+<b><code>.setup</code> — сменить ключ</b>
 """
     await event.respond(help_text, parse_mode="html")
 
@@ -90,7 +94,7 @@ async def help_cmd(event):
 @client.on(events.NewMessage(pattern=r'\.setup'))
 async def setup_cmd(event):
     await event.delete()
-    msg = await event.respond("🔧 Отправь новый Mistral ключ в ответ.")
+    msg = await event.respond("Отправь новый Mistral ключ в ответ.")
     try:
         reply = await client.wait_for(event.chat_id, timeout=60)
         if reply.reply_to_msg_id == msg.id:
@@ -99,19 +103,15 @@ async def setup_cmd(event):
             global MISTRAL_KEY
             MISTRAL_KEY = new_key
             await reply.delete()
-            await msg.edit("✅ Ключ обновлён! Устанавливаю ИИ...")
-            if ensure_mistral():
-                await msg.edit("✅ Ключ обновлён! ИИ готов к работе.")
-            else:
-                await msg.edit("⚠️ Ключ сохранён, но не удалось установить ИИ.")
+            await msg.edit("Ключ обновлен! ИИ готов.")
     except:
-        await msg.edit("⏰ Время вышло.")
+        await msg.edit("Время вышло.")
 
 # === .mute N ===
 @client.on(events.NewMessage(pattern=r'\.mute (\d+)'))
 async def mute_cmd(event):
     if not event.is_reply:
-        await event.respond("⚠️ Ответьте на сообщение пользователя.")
+        await event.respond("Ответьте на сообщение пользователя.")
         return
     minutes = int(event.pattern_match.group(1))
     target = await event.get_reply_message()
@@ -131,7 +131,7 @@ async def mute_cmd(event):
 @client.on(events.NewMessage(pattern=r'\.unmute'))
 async def unmute_cmd(event):
     if not event.is_reply:
-        await event.respond("⚠️ Ответьте на сообщение пользователя.")
+        await event.respond("Ответьте на сообщение пользователя.")
         return
     target = await event.get_reply_message()
     user_id = target.sender_id
@@ -139,13 +139,13 @@ async def unmute_cmd(event):
     if user_id in muted_users:
         del muted_users[user_id]
     await event.delete()
-    await event.respond(f"🔊 Мут снят. {user_name} снова может писать.")
+    await event.respond(f"🔊 Мут снят.")
 
 # === .panic ===
 @client.on(events.NewMessage(pattern=r'\.panic'))
 async def panic_cmd(event):
     await event.delete()
-    status = await event.respond("🧹 Зачищаю переписку...")
+    status = await event.respond("Зачищаю переписку...")
     count = 0
     async for msg in client.iter_messages(event.chat_id, limit=None):
         try:
@@ -153,17 +153,17 @@ async def panic_cmd(event):
             count += 1
         except: pass
     await client(DeleteHistoryRequest(peer=event.chat_id, max_id=0, just_clear=False))
-    await status.edit(f"✅ История очищена. Удалено {count} сообщений.")
+    await status.edit(f"История очищена. Удалено {count} сообщений.")
 
 # === .del N ===
 @client.on(events.NewMessage(pattern=r'\.del (\d+)'))
 async def del_cmd(event):
     seconds = int(event.pattern_match.group(1))
     await event.delete()
-    status = await event.respond(f"⏳ Чат будет очищен через {seconds} сек...")
+    status = await event.respond(f"Чат очистится через {seconds} сек...")
     for i in range(seconds, 0, -1):
         await asyncio.sleep(1)
-        try: await status.edit(f"⏳ Чат будет очищен через {i} сек...")
+        try: await status.edit(f"Чат очистится через {i} сек...")
         except: pass
     count = 0
     async for m in client.iter_messages(event.chat_id, limit=None):
@@ -172,7 +172,7 @@ async def del_cmd(event):
             count += 1
         except: pass
     await client(DeleteHistoryRequest(peer=event.chat_id, max_id=0, just_clear=False))
-    await event.respond(f"✅ Чат очищен. Удалено {count} сообщений.")
+    await event.respond(f"Чат очищен. Удалено {count} сообщений.")
 
 # === .txt текст ===
 @client.on(events.NewMessage(pattern=r'\.txt (.+)'))
@@ -192,7 +192,7 @@ async def txt_cmd(event):
 @client.on(events.NewMessage(pattern=r'\.warn (\d+)'))
 async def warn_cmd(event):
     if not event.is_reply:
-        await event.respond("⚠️ Ответьте на сообщение пользователя.")
+        await event.respond("Ответьте на сообщение пользователя.")
         return
     limit = min(int(event.pattern_match.group(1)), 100)
     target = await event.get_reply_message()
@@ -206,11 +206,10 @@ async def warn_cmd(event):
 @client.on(events.NewMessage(pattern=r'\.unwarn'))
 async def unwarn_cmd(event):
     if not event.is_reply:
-        await event.respond("⚠️ Ответьте на сообщение пользователя.")
+        await event.respond("Ответьте на сообщение пользователя.")
         return
     target = await event.get_reply_message()
     user_id = target.sender_id
-    user_name = target.sender.first_name or "Пользователь"
     if user_id in warn_limits:
         try:
             old_msg = await event.client.get_messages(event.chat_id, ids=warn_limits[user_id]["msg_id"])
@@ -220,39 +219,36 @@ async def unwarn_cmd(event):
     if user_id in muted_users:
         del muted_users[user_id]
     await event.delete()
-    await event.respond(f"✅ Варн снят. {user_name} снова может писать без ограничений.")
+    await event.respond("Варн снят.")
 
 # === .voice текст ===
 @client.on(events.NewMessage(pattern=r'\.voice (.+)'))
 async def voice_cmd(event):
     text = event.pattern_match.group(1)
     await event.delete()
-    status = await event.respond("🎤 Генерирую голосовое...")
+    status = await event.respond("Генерирую голосовое...")
     try:
         tts = gTTS(text, lang='ru')
-        path = f"voice_{event.sender_id}.mp3"
+        path = f"/tmp/voice_{event.sender_id}.mp3"
         tts.save(path)
         await client.send_file(event.chat_id, path, voice_note=True)
         await status.delete()
         os.remove(path)
     except Exception as e:
-        await status.edit(f"❌ Ошибка: {e}")
+        await status.edit(f"Ошибка: {e}")
 
 # === .ai текст ===
 @client.on(events.NewMessage(pattern=r'\.ai (.+)'))
 async def ai_cmd(event):
     if not MISTRAL_KEY:
-        await event.respond("❌ ИИ отключён. Получи ключ на console.mistral.ai и введи через .setup")
+        await event.respond("ИИ отключен. Получи ключ на console.mistral.ai и введи через .setup")
         return
-    
     question = event.pattern_match.group(1)
     await event.delete()
-    status = await event.respond("🤖 Думаю...")
-    
+    status = await event.respond("Думаю...")
     if not ensure_mistral():
-        await status.edit("❌ Не удалось установить ИИ. Попробуй .setup снова.")
+        await status.edit("Не удалось установить ИИ.")
         return
-    
     try:
         from mistralai import Mistral
         client_ai = Mistral(api_key=MISTRAL_KEY)
@@ -261,16 +257,16 @@ async def ai_cmd(event):
             messages=[{"role": "user", "content": question}]
         )
         answer = response.choices[0].message.content
-        await status.edit(f"🤖 {answer}")
+        await status.edit(f"{answer}")
     except Exception as e:
-        await status.edit(f"❌ Ошибка: {e}")
+        await status.edit(f"Ошибка: {e}")
 
 # === .draw описание ===
 @client.on(events.NewMessage(pattern=r'\.draw (.+)'))
 async def draw_cmd(event):
     prompt = event.pattern_match.group(1)
     await event.delete()
-    status = await event.respond("🎨 Рисую...")
+    status = await event.respond("Рисую...")
     try:
         from deep_translator import GoogleTranslator
         if any('а' <= c <= 'я' or 'А' <= c <= 'Я' for c in prompt):
@@ -279,51 +275,51 @@ async def draw_cmd(event):
         url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width=512&height=512&nologo=true"
         response = requests.get(url, timeout=60)
         if response.status_code != 200:
-            await status.edit("❌ Сервер не ответил.")
+            await status.edit("Сервер не ответил.")
             return
-        path = f"draw_{event.sender_id}.jpg"
+        path = f"/tmp/draw_{event.sender_id}.jpg"
         with open(path, "wb") as f:
             f.write(response.content)
-        await client.send_file(event.chat_id, path, caption=f"🎨 {prompt}")
+        await client.send_file(event.chat_id, path, caption=f"{prompt}")
         await status.delete()
         os.remove(path)
     except Exception as e:
-        await status.edit(f"❌ Ошибка: {e}")
+        await status.edit(f"Ошибка: {e}")
 
 # === .trans ===
 @client.on(events.NewMessage(pattern=r'\.trans(?: (\w+))?'))
 async def trans_cmd(event):
     target_lang = event.pattern_match.group(1) or "ru"
     if not event.is_reply:
-        await event.respond("⚠️ Ответьте на сообщение для перевода.")
+        await event.respond("Ответьте на сообщение для перевода.")
         return
     reply = await event.get_reply_message()
     if not reply.text:
-        await event.respond("⚠️ Только текст.")
+        await event.respond("Только текст.")
         return
     await event.delete()
-    status = await event.respond("🌐 Перевожу...")
+    status = await event.respond("Перевожу...")
     try:
         from deep_translator import GoogleTranslator
         translated = GoogleTranslator(source="auto", target=target_lang).translate(reply.text)
-        await status.edit(f"🌐 [{target_lang}] {translated}")
+        await status.edit(f"[{target_lang}] {translated}")
     except Exception as e:
-        await status.edit(f"❌ Ошибка: {e}")
+        await status.edit(f"Ошибка: {e}")
 
 # === .save ===
 @client.on(events.NewMessage(pattern=r'\.save'))
 async def save_cmd(event):
     if not event.is_reply:
-        await event.respond("⚠️ Ответьте на сообщение для сохранения.")
+        await event.respond("Ответьте на сообщение для сохранения.")
         return
     reply = await event.get_reply_message()
     await event.delete()
     try:
         me = await client.get_me()
         await client.forward_messages(me.id, reply)
-        await event.respond("✅ Сохранено в Избранное.")
+        await event.respond("Сохранено в Избранное.")
     except:
-        await event.respond("❌ Ошибка сохранения.")
+        await event.respond("Ошибка сохранения.")
 
 # === .timer N текст ===
 @client.on(events.NewMessage(pattern=r'\.timer (\d+) (.+)'))
@@ -339,11 +335,11 @@ async def timer_cmd(event):
 @client.on(events.NewMessage(pattern=r'\.mock'))
 async def mock_cmd(event):
     if not event.is_reply:
-        await event.respond("⚠️ Ответьте на сообщение.")
+        await event.respond("Ответьте на сообщение.")
         return
     reply = await event.get_reply_message()
     if not reply.text:
-        await event.respond("⚠️ Только текст.")
+        await event.respond("Только текст.")
         return
     await event.delete()
     result = ""
@@ -361,17 +357,17 @@ async def mock_cmd(event):
 async def qr_cmd(event):
     text = event.pattern_match.group(1)
     await event.delete()
-    status = await event.respond("📱 Генерирую QR-код...")
+    status = await event.respond("Генерирую QR-код...")
     try:
         url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={text}"
         response = requests.get(url)
-        path = f"qr_{event.sender_id}.png"
+        path = f"/tmp/qr_{event.sender_id}.png"
         with open(path, "wb") as f: f.write(response.content)
-        await client.send_file(event.chat_id, path, caption=f"📱 QR: {text}")
+        await client.send_file(event.chat_id, path, caption=f"QR: {text}")
         await status.delete()
         os.remove(path)
     except Exception as e:
-        await status.edit(f"❌ Ошибка: {e}")
+        await status.edit(f"Ошибка: {e}")
 
 # === Автоматическая обработка ===
 @client.on(events.NewMessage(incoming=True))
@@ -394,29 +390,30 @@ async def check_restrictions(event):
             muted_users[event.sender_id] = datetime.now() + timedelta(hours=1)
             try:
                 old_msg = await event.client.get_messages(event.chat_id, ids=w["msg_id"])
-                await old_msg.edit(f"🚫 Автомут! Лимит {w['limit']} сообщений превышен.")
+                await old_msg.edit(f"Автомут! Лимит {w['limit']} сообщений превышен.")
             except: pass
             del warn_limits[event.sender_id]
 
-# === Запуск ===
+# === Запуск с поддержкой облачного пароля ===
 async def main():
-    await client.start()
-    print(f"""
-╔══════════════════════════════════════╗
-║        🚀 USERBOT ЗАПУЩЕН          ║
-╠══════════════════════════════════════╣
-║ 🤖 ИИ: {"Mistral ✅" if MISTRAL_KEY else "❌ отключён"}
-║ 🎨 Рисование: Pollinations ✅
-║ 📋 .help — все команды
-║ ⚙️ .setup — сменить ключ
-╚══════════════════════════════════════╝
-""")
-    if MISTRAL_KEY:
-        print("🔄 Проверяю Mistral AI...")
-        if ensure_mistral():
-            print("✅ ИИ готов!")
-        else:
-            print("⚠️ Не удалось установить ИИ")
+    log("Запуск бота...")
+    
+    try:
+        # Пробуем запустить без пароля
+        await client.start(phone=PHONE)
+        log("Вход выполнен!")
+    except errors.SessionPasswordNeededError:
+        log("Требуется облачный пароль!")
+        # Пароль нужно ввести через приложение
+        sys.exit(1)
+    except Exception as e:
+        log(f"Ошибка входа: {e}")
+        sys.exit(1)
+    
+    me = await client.get_me()
+    log(f"Вошли как: {me.first_name} (@{me.username})")
+    log("Бот запущен и готов к работе!")
+    
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
