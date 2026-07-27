@@ -188,10 +188,23 @@ class PhoneScreen(Screen):
         code = self.spinner.text.split(" ")[0]
         number = self.phone_input.text.strip()
         if number and len(number) > 3:
-            App.get_running_app().phone = code + number
-            self.manager.current = 'code'
+            phone = code + number
+            App.get_running_app().phone = phone
+            self.status_label.text = "Отправляю код..."
+            threading.Thread(target=self.send_code, args=(phone,), daemon=True).start()
         else:
             self.status_label.text = "Введите корректный номер"
+    
+    def send_code(self, phone):
+        try:
+            from telethon import TelegramClient
+            client = TelegramClient('/storage/emulated/0/temp_session', 2040, "b18441a1ff607e10a989891a5462e627")
+            client.connect()
+            client.send_code_request(phone)
+            client.disconnect()
+            Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'code'), 0)
+        except Exception as e:
+            Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', f"Ошибка: {e}"), 0)
 
 class CodeScreen(Screen):
     def __init__(self, **kwargs):
