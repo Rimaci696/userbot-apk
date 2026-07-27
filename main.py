@@ -235,9 +235,14 @@ class CodeScreen(Screen):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(12))
         layout.add_widget(Label(text="[b]Код из Telegram[/b]", font_size=sp(22), size_hint=(1, 0.08), markup=True, color=WHITE))
-        layout.add_widget(Label(text="На ваш номер отправлен код", font_size=sp(12), size_hint=(1, 0.05), color=GRAY))
-        self.code_input = TextInput(hint_text="Введите код", font_size=sp(24), size_hint=(1, 0.1), multiline=False)
+        layout.add_widget(Label(text="На ваш номер отправлен код\nЕсли облачный пароль — введите его ниже", font_size=sp(12), size_hint=(1, 0.08), color=GRAY))
+        
+        self.code_input = TextInput(hint_text="Код из SMS", font_size=sp(22), size_hint=(1, 0.08), multiline=False)
         layout.add_widget(self.code_input)
+        
+        self.password_input = TextInput(hint_text="Облачный пароль (если есть)", font_size=sp(18), size_hint=(1, 0.08), multiline=False, password=True)
+        layout.add_widget(self.password_input)
+        
         self.status_label = Label(text="", font_size=sp(12), size_hint=(1, 0.04), color=RED)
         layout.add_widget(self.status_label)
         
@@ -251,16 +256,18 @@ class CodeScreen(Screen):
         btn_box.add_widget(next_btn)
         layout.add_widget(btn_box)
         
-        layout.add_widget(Label(size_hint=(1, 0.45)))
+        layout.add_widget(Label(size_hint=(1, 0.35)))
         self.add_widget(layout)
     
     def save_code(self, instance):
         code = self.code_input.text.strip()
+        password = self.password_input.text.strip()
         if code:
             App.get_running_app().code = code
+            App.get_running_app().password = password
             self.manager.current = 'mistral'
         else:
-            self.status_label.text = "Введите код"
+            self.status_label.text = "Введите код из SMS"
 
 class MistralScreen(Screen):
     def __init__(self, **kwargs):
@@ -339,7 +346,7 @@ class RunningScreen(Screen):
     
     def on_enter(self):
         app = App.get_running_app()
-        config = {"phone": app.phone, "code": app.code, "mistral_key": app.mistral_key}
+       config = {"phone": app.phone, "code": app.code, "password": app.password, "mistral_key": app.mistral_key}
         with open(CONFIG_PATH, "w") as f:
             json.dump(config, f)
         
@@ -403,6 +410,7 @@ class RunningScreen(Screen):
 class UserbotApp(App):
     phone = ""
     code = ""
+    password = ""
     mistral_key = ""
     
     def build(self):
