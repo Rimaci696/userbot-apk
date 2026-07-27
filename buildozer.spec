@@ -5,6 +5,7 @@ package.domain = com.userbot.app
 source.dir = .
 source.include_exts = py
 version = 1.0
+icon.filename = icon.png
 requirements = python3,kivy,telethon,gtts,deep-translator,requests,pillow
 orientation = portrait
 fullscreen = 0
