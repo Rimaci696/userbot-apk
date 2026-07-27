@@ -135,7 +135,6 @@ class HelpScreen(Screen):
 Важно:
 - Отключите облачный пароль Telegram
 - EXE может ругаться антивирусом
-  (это ложное срабатывание)
 - Код открыт на GitHub
 """,
             font_size=sp(12), size_hint=(1, None), halign='left', valign='top', color=GRAY
@@ -185,32 +184,21 @@ class PhoneScreen(Screen):
         self.add_widget(layout)
     
     def save_phone(self, instance):
-    code = self.spinner.text.split(" ")[0]
-    number = self.phone_input.text.strip()
-    if number and len(number) > 3:
-        phone = code + number
-        App.get_running_app().phone = phone
-        self.manager.current = 'code'
-    else:
-        self.status_label.text = "Введите корректный номер"
-    
-    def send_code(self, phone):
-        try:
-            from telethon import TelegramClient
-            client = TelegramClient('/storage/emulated/0/temp_session', 2040, "b18441a1ff607e10a989891a5462e627")
-            client.connect()
-            client.send_code_request(phone)
-            client.disconnect()
-            Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'code'), 0)
-        except Exception as e:
-            Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', f"Ошибка: {e}"), 0)
+        code = self.spinner.text.split(" ")[0]
+        number = self.phone_input.text.strip()
+        if number and len(number) > 3:
+            phone = code + number
+            App.get_running_app().phone = phone
+            self.manager.current = 'code'
+        else:
+            self.status_label.text = "Введите корректный номер"
 
 class CodeScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(12))
         layout.add_widget(Label(text="[b]Код из Telegram[/b]", font_size=sp(22), size_hint=(1, 0.08), markup=True, color=WHITE))
-        layout.add_widget(Label(text="На ваш номер отправлен код", font_size=sp(12), size_hint=(1, 0.05), color=GRAY))
+        layout.add_widget(Label(text="Код придёт после запуска бота", font_size=sp(12), size_hint=(1, 0.05), color=GRAY))
         self.code_input = TextInput(hint_text="Введите код", font_size=sp(24), size_hint=(1, 0.08), multiline=False)
         layout.add_widget(self.code_input)
         
