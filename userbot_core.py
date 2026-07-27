@@ -10,12 +10,10 @@ from telethon import TelegramClient, events, errors
 from telethon.tl.functions.messages import DeleteHistoryRequest
 from gtts import gTTS
 
-# ---------- НАСТРОЙКИ ----------
 API_ID = 2040
 API_HASH = "b18441a1ff607e10a989891a5462e627"
 CONFIG_PATH = "/storage/emulated/0/userbot_config.json"
 LOG_PATH = "/storage/emulated/0/userbot_log.txt"
-# --------------------------------
 
 def log(msg):
     with open(LOG_PATH, "a") as f:
@@ -33,22 +31,13 @@ def ensure_mistral():
         except ImportError:
             return False
 
-def load_config():
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, "r") as f:
-            return json.load(f)
-    return {}
+config = {}
+if os.path.exists(CONFIG_PATH):
+    with open(CONFIG_PATH) as f:
+        config = json.load(f)
 
-def save_config(key):
-    config = load_config()
-    config["mistral_key"] = key
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f)
-
-config = load_config()
 MISTRAL_KEY = config.get("mistral_key", "")
 PHONE = config.get("phone", "")
-CODE = config.get("code", "")
 PASSWORD = config.get("password", "")
 
 muted_users = {}
@@ -397,25 +386,16 @@ async def check_restrictions(event):
 async def main():
     log("Запуск бота...")
     
-    code_from_app = CODE
-    
-    async def code_callback():
-        return code_from_app
-    
     try:
-        await client.start(phone=PHONE, code_callback=code_callback)
+        await client.start(phone=PHONE, password=PASSWORD)
         log("Вход выполнен!")
-    except errors.SessionPasswordNeededError:
-        log("Нужен облачный пароль, вхожу...")
-        await client.sign_in(password=PASSWORD)
-        log("Вход по паролю!")
     except Exception as e:
         log(f"Ошибка входа: {e}")
         sys.exit(1)
     
     me = await client.get_me()
     log(f"Вошли как: {me.first_name}")
-    log("Бот готов к работе!")
+    log("Бот готов!")
     
     await client.run_until_disconnected()
 
