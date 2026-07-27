@@ -3,7 +3,6 @@ import json
 import threading
 import sys
 import subprocess
-import time
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.boxlayout import BoxLayout
@@ -14,16 +13,12 @@ from kivy.uix.scrollview import ScrollView
 from kivy.core.window import Window
 from kivy.clock import Clock
 from kivy.metrics import dp, sp
-from kivy.utils import get_color_from_hex, platform
+from kivy.utils import get_color_from_hex
 
-# Авто-фулскрин
 Window.fullscreen = 'auto'
 
 CONFIG_PATH = "/storage/emulated/0/userbot_config.json"
-LOG_PATH = "/storage/emulated/0/userbot_log.txt"
-BOT_PID_PATH = "/storage/emulated/0/userbot_pid.txt"
 
-# Цвета
 GREEN = get_color_from_hex('#2ECC71')
 BLUE = get_color_from_hex('#3498DB')
 GRAY = get_color_from_hex('#7F8C8D')
@@ -32,43 +27,13 @@ DARK = get_color_from_hex('#1a1a2e')
 RED = get_color_from_hex('#E74C3C')
 YELLOW = get_color_from_hex('#F39C12')
 
-# Глобальная переменная для бота
-bot_process = None
-is_bot_running = False
-
-def log(msg):
-    """Запись в лог"""
-    with open(LOG_PATH, "a") as f:
-        f.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
-
-def send_notification(title, text, color="green"):
-    """Уведомление через Kivy (заглушка)"""
-    try:
-        from jnius import autoclass
-        NotificationBuilder = autoclass('android.app.Notification$Builder')
-        # Здесь был бы код уведомления
-    except:
-        pass  # На ПК не работает
-
 class SplashScreen(Screen):
-    """Экран загрузки с логотипом"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(30), spacing=dp(15))
-        
-        # Логотип
-        try:
-            from kivy.uix.image import Image
-            logo = Image(source='icon.png', size_hint=(1, 0.3))
-            layout.add_widget(logo)
-        except:
-            layout.add_widget(Label(text="[b]USERBOT[/b]", font_size=sp(40), markup=True, color=WHITE))
-        
+        layout.add_widget(Label(text="[b]USERBOT[/b]", font_size=sp(40), markup=True, color=WHITE))
         layout.add_widget(Label(text="Многофункциональный бот\nдля Telegram", font_size=sp(16), color=GRAY, halign='center'))
-        
-        self.status_label = Label(text="Загрузка...", font_size=sp(14), color=YELLOW)
-        layout.add_widget(self.status_label)
-        
+        layout.add_widget(Label(text="Загрузка...", font_size=sp(14), color=YELLOW))
         layout.add_widget(Label(size_hint=(1, 0.3)))
         self.add_widget(layout)
     
@@ -77,7 +42,6 @@ class SplashScreen(Screen):
     
     def check_and_go(self):
         if os.path.exists(CONFIG_PATH):
-            self.status_label.text = "Найдена сохранённая сессия"
             Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'running'), 1)
         else:
             Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'welcome'), 1)
@@ -91,7 +55,7 @@ class WelcomeScreen(Screen):
         scroll = ScrollView(size_hint=(1, 0.55))
         info = Label(
             text="""
-[u]Что умеет бот:[/u]
+Что умеет бот:
 
 - Анимированная печать
 - Голосовые сообщения
@@ -102,11 +66,11 @@ class WelcomeScreen(Screen):
 - QR-коды
 - Модерация чатов
 
-[u]Нужен Mistral ключ:[/u]
+Нужен Mistral ключ:
 console.mistral.ai
 (Можно пропустить)
 """,
-            font_size=sp(13), size_hint=(1, None), halign='left', valign='top', markup=True, color=GRAY
+            font_size=sp(13), size_hint=(1, None), halign='left', valign='top', color=GRAY
         )
         info.bind(texture_size=info.setter('size'))
         scroll.add_widget(info)
@@ -126,7 +90,6 @@ console.mistral.ai
         self.add_widget(layout)
 
 class HelpScreen(Screen):
-    """Экран помощи со всеми командами"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(8))
@@ -135,47 +98,47 @@ class HelpScreen(Screen):
         scroll = ScrollView(size_hint=(1, 0.8))
         help_text = Label(
             text="""
-[u][b]Текст и голос:[/b][/u]
+Текст и голос:
 .txt текст - анимированная печать
 .voice текст - голосовое сообщение
 .timer N текст - исчезающее сообщение
 .mock - ИзДeВкА над текстом (reply)
 
-[u][b]Нейросети:[/b][/u]
+Нейросети:
 .ai вопрос - Mistral AI
 .draw описание - рисует картинку
 
-[u][b]Инструменты:[/b][/u]
+Инструменты:
 .trans - перевод сообщения (reply)
 .qr ссылка - генератор QR-кода
 .save - сохранить в Избранное (reply)
 
-[u][b]Модерация:[/b][/u]
+Модерация:
 .mute N - мут на N минут (reply)
 .unmute - снять мут (reply)
 .warn N - лимит сообщений (reply)
 .unwarn - снять лимит (reply)
 
-[u][b]Очистка:[/b][/u]
+Очистка:
 .panic - очистить историю
 .del N - удалить чат через N сек
 
 .help - это меню в чате
 .setup - сменить Mistral ключ
 
-[u][b]Получить Mistral ключ:[/b][/u]
+Получить Mistral ключ:
 1. console.mistral.ai
 2. Зарегистрироваться
 3. API Keys -> Create key
 4. Скопировать ключ
 
-[u][b]Важно:[/b][/u]
+Важно:
 - Отключите облачный пароль Telegram
 - EXE может ругаться антивирусом
   (это ложное срабатывание)
 - Код открыт на GitHub
 """,
-            font_size=sp(12), size_hint=(1, None), halign='left', valign='top', markup=True, color=GRAY
+            font_size=sp(12), size_hint=(1, None), halign='left', valign='top', color=GRAY
         )
         help_text.bind(texture_size=help_text.setter('size'))
         scroll.add_widget(help_text)
@@ -229,18 +192,17 @@ class PhoneScreen(Screen):
             self.manager.current = 'code'
         else:
             self.status_label.text = "Введите корректный номер"
-            
+
 class CodeScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(12))
         layout.add_widget(Label(text="[b]Код из Telegram[/b]", font_size=sp(22), size_hint=(1, 0.08), markup=True, color=WHITE))
-        layout.add_widget(Label(text="На ваш номер отправлен код\nЕсли облачный пароль — введите его ниже", font_size=sp(12), size_hint=(1, 0.08), color=GRAY))
-        
-        self.code_input = TextInput(hint_text="Код из SMS", font_size=sp(22), size_hint=(1, 0.08), multiline=False)
+        layout.add_widget(Label(text="На ваш номер отправлен код", font_size=sp(12), size_hint=(1, 0.05), color=GRAY))
+        self.code_input = TextInput(hint_text="Введите код", font_size=sp(24), size_hint=(1, 0.08), multiline=False)
         layout.add_widget(self.code_input)
         
-        self.password_input = TextInput(hint_text="Облачный пароль (если есть)", font_size=sp(18), size_hint=(1, 0.08), multiline=False, password=True)
+        self.password_input = TextInput(hint_text="Облачный пароль (если есть)", font_size=sp(16), size_hint=(1, 0.08), multiline=False)
         layout.add_widget(self.password_input)
         
         self.status_label = Label(text="", font_size=sp(12), size_hint=(1, 0.04), color=RED)
@@ -256,18 +218,19 @@ class CodeScreen(Screen):
         btn_box.add_widget(next_btn)
         layout.add_widget(btn_box)
         
-        layout.add_widget(Label(size_hint=(1, 0.35)))
+        layout.add_widget(Label(size_hint=(1, 0.45)))
         self.add_widget(layout)
     
     def save_code(self, instance):
         code = self.code_input.text.strip()
         password = self.password_input.text.strip()
         if code:
-            App.get_running_app().code = code
-            App.get_running_app().password = password
+            app = App.get_running_app()
+            app.code = code
+            app.password = password
             self.manager.current = 'mistral'
         else:
-            self.status_label.text = "Введите код из SMS"
+            self.status_label.text = "Введите код"
 
 class MistralScreen(Screen):
     def __init__(self, **kwargs):
@@ -277,8 +240,6 @@ class MistralScreen(Screen):
         layout.add_widget(Label(text="console.mistral.ai -> API Keys\nМожно пропустить", font_size=sp(12), size_hint=(1, 0.1), color=GRAY))
         self.key_input = TextInput(hint_text="Вставьте ключ", font_size=sp(14), size_hint=(1, 0.08), multiline=False)
         layout.add_widget(self.key_input)
-        self.status_label = Label(text="", font_size=sp(12), size_hint=(1, 0.04))
-        layout.add_widget(self.status_label)
         
         btn_box = BoxLayout(size_hint=(1, 0.1), spacing=dp(10))
         back_btn = Button(text="НАЗАД", background_color=GRAY, font_size=sp(14), color=WHITE)
@@ -303,109 +264,36 @@ class MistralScreen(Screen):
     
     def save_key(self, instance):
         App.get_running_app().mistral_key = self.key_input.text.strip()
-        self.status_label.text = "Ключ сохранен"
         Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'running'), 0.5)
 
 class RunningScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(12))
-        
-        self.indicator = Label(text="[b]● БОТ ЗАПУЩЕН[/b]", font_size=sp(22), size_hint=(1, 0.1), markup=True, color=GREEN)
-        layout.add_widget(self.indicator)
-        
-        self.status_label = Label(text="Подготовка...", font_size=sp(14), size_hint=(1, 0.15), color=GRAY)
+        layout.add_widget(Label(text="[b]БОТ ЗАПУЩЕН![/b]", font_size=sp(26), size_hint=(1, 0.15), markup=True, color=GREEN))
+        self.status_label = Label(text="Подготовка...", font_size=sp(14), size_hint=(1, 0.25), color=GRAY)
         layout.add_widget(self.status_label)
-        
-        # Логи
-        self.log_scroll = ScrollView(size_hint=(1, 0.35))
-        self.log_label = Label(text="", font_size=sp(10), size_hint=(1, None), halign='left', valign='top', color=GRAY)
-        self.log_label.bind(texture_size=self.log_label.setter('size'))
-        self.log_scroll.add_widget(self.log_label)
-        layout.add_widget(self.log_scroll)
-        
-        # Кнопки
-        btn_box = BoxLayout(size_hint=(1, 0.1), spacing=dp(10))
-        
-        stop_btn = Button(text="СТОП", background_color=RED, font_size=sp(14), color=WHITE)
-        stop_btn.bind(on_press=self.stop_bot)
-        btn_box.add_widget(stop_btn)
-        
-        restart_btn = Button(text="РЕСТАРТ", background_color=YELLOW, font_size=sp(14), color=WHITE)
-        restart_btn.bind(on_press=self.restart_bot)
-        btn_box.add_widget(restart_btn)
-        
-        log_btn = Button(text="ЛОГИ", background_color=BLUE, font_size=sp(14), color=WHITE)
-        log_btn.bind(on_press=self.show_logs)
-        btn_box.add_widget(log_btn)
-        
-        layout.add_widget(btn_box)
-        
-        layout.add_widget(Label(text=".help - команды | .setup - ключ", font_size=sp(10), size_hint=(1, 0.08), color=GRAY))
+        layout.add_widget(Label(text=".help - список команд\n.setup - сменить ключ", font_size=sp(12), size_hint=(1, 0.3), color=GRAY))
+        layout.add_widget(Label(size_hint=(1, 0.2)))
         self.add_widget(layout)
     
     def on_enter(self):
         app = App.get_running_app()
-       config = {"phone": app.phone, "code": app.code, "password": app.password, "mistral_key": app.mistral_key}
+        config = {"phone": app.phone, "code": app.code, "password": app.password, "mistral_key": app.mistral_key}
         with open(CONFIG_PATH, "w") as f:
             json.dump(config, f)
-        
-        log("Запуск бота...")
-        self.update_indicator("yellow", "Запуск бота...")
-        
+        self.status_label.text = "Запускаю бота..."
         threading.Thread(target=self.start_bot, daemon=True).start()
-        Clock.schedule_interval(self.update_logs, 2)
     
     def start_bot(self):
-        global is_bot_running, bot_process
         app = App.get_running_app()
-        
         if app.mistral_key:
-            log("Установка Mistral AI...")
             try:
                 import mistralai
             except ImportError:
                 subprocess.run([sys.executable or "python3", "-m", "pip", "install", "mistralai"], capture_output=True)
-                log("Mistral AI установлен")
-        
         script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "userbot_core.py")
-        bot_process = subprocess.Popen([sys.executable or "python3", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        is_bot_running = True
-        
-        with open(BOT_PID_PATH, "w") as f:
-            f.write(str(bot_process.pid))
-        
-        log("Бот запущен!")
-        self.update_indicator("green", "Бот работает")
-        send_notification("UserBot", "Бот запущен и работает")
-    
-    def stop_bot(self, instance):
-        global is_bot_running, bot_process
-        if bot_process:
-            bot_process.terminate()
-            is_bot_running = False
-            log("Бот остановлен")
-            self.update_indicator("red", "Бот остановлен")
-            self.log_label.text = ""
-    
-    def restart_bot(self, instance):
-        self.stop_bot(None)
-        Clock.schedule_once(lambda dt: self.start_bot(), 1)
-    
-    def show_logs(self, instance):
-        self.update_logs(0)
-    
-    def update_indicator(self, color, text):
-        colors = {"green": GREEN, "yellow": YELLOW, "red": RED}
-        c = colors.get(color, GRAY)
-        self.indicator.color = c
-        self.status_label.text = text
-    
-    def update_logs(self, dt):
-        if os.path.exists(LOG_PATH):
-            with open(LOG_PATH) as f:
-                lines = f.readlines()[-20:]
-                self.log_label.text = "".join(lines)
+        subprocess.Popen([sys.executable or "python3", script])
 
 class UserbotApp(App):
     phone = ""
@@ -415,11 +303,6 @@ class UserbotApp(App):
     
     def build(self):
         self.title = "UserBot"
-        
-        # Очистка лога при старте
-        with open(LOG_PATH, "w") as f:
-            f.write("")
-        
         sm = ScreenManager()
         sm.add_widget(SplashScreen(name='splash'))
         sm.add_widget(WelcomeScreen(name='welcome'))
