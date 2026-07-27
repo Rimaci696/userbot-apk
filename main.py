@@ -19,8 +19,6 @@ from kivy.utils import get_color_from_hex
 Window.fullscreen = 'auto'
 
 CONFIG_PATH = "/storage/emulated/0/userbot_config.json"
-API_ID = 2040
-API_HASH = "b18441a1ff607e10a989891a5462e627"
 
 GREEN = get_color_from_hex('#2ECC71')
 BLUE = get_color_from_hex('#3498DB')
@@ -30,22 +28,9 @@ DARK = get_color_from_hex('#1a1a2e')
 RED = get_color_from_hex('#E74C3C')
 YELLOW = get_color_from_hex('#F39C12')
 
-# Глобальный клиент для отправки/проверки кода
-telethon_client = None
-
-def run_async(func, *args):
-    """Запускает асинхронную функцию в отдельном потоке"""
-    def wrapper():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(func(*args))
-        loop.close()
-    threading.Thread(target=wrapper, daemon=True).start()
-
-async def send_code_async(phone):
-    """Отправляет код на номер"""
+async def send_code_async(phone, api_id, api_hash):
     from telethon import TelegramClient
-    client = TelegramClient('/storage/emulated/0/temp_session', API_ID, API_HASH)
+    client = TelegramClient('/storage/emulated/0/temp_session', api_id, api_hash)
     await client.connect()
     try:
         result = await client.send_code_request(phone)
@@ -55,16 +40,23 @@ async def send_code_async(phone):
         await client.disconnect()
         return False, str(e)
 
-async def verify_code_async(phone, code, code_hash):
-    """Проверяет код"""
+async def verify_code_async(phone, code, code_hash, password, api_id, api_hash):
     from telethon import TelegramClient, errors
-    client = TelegramClient('/storage/emulated/0/userbot_session', API_ID, API_HASH)
+    client = TelegramClient('/storage/emulated/0/userbot_session', api_id, api_hash)
     await client.connect()
     try:
         await client.sign_in(phone=phone, code=code, phone_code_hash=code_hash)
         await client.disconnect()
         return True, "OK"
     except errors.SessionPasswordNeededError:
+        if password:
+            try:
+                await client.sign_in(password=password)
+                await client.disconnect()
+                return True, "OK"
+            except Exception as e:
+                await client.disconnect()
+                return False, f"Неверный пароль: {e}"
         await client.disconnect()
         return True, "PASSWORD"
     except errors.PhoneCodeInvalidError:
@@ -72,7 +64,7 @@ async def verify_code_async(phone, code, code_hash):
         return False, "Неверный код"
     except errors.PhoneCodeExpiredError:
         await client.disconnect()
-        return False, "Код истёк"
+        return False, "Код истёк, запросите новый"
     except Exception as e:
         await client.disconnect()
         return False, str(e)
@@ -131,7 +123,7 @@ console.mistral.ai (можно пропустить)
         help_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'help_screen'))
         btn_box.add_widget(help_btn)
         start_btn = Button(text="НАЧАТЬ", background_color=GREEN, font_size=sp(14), color=WHITE)
-        start_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'phone'))
+        start_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'api'))
         btn_box.add_widget(start_btn)
         layout.add_widget(btn_box)
         self.add_widget(layout)
@@ -144,38 +136,43 @@ class HelpScreen(Screen):
         scroll = ScrollView(size_hint=(1, 0.8))
         help_text = Label(
             text="""
-Текст и голос:
+[u]Как получить API ID и API Hash:[/u]
+1. my.telegram.org
+2. Войдите под своим номером
+3. API Development
+4. Создайте приложение (любое название)
+5. Скопируйте api_id и api_hash
+
+[u]Как получить Mistral ключ:[/u]
+1. console.mistral.ai
+2. Зарегистрируйтесь
+3. API Keys -> Create key
+
+[u]Команды бота:[/u]
 .txt текст - анимированная печать
 .voice текст - голосовое сообщение
 .timer N текст - исчезающее сообщение
 .mock - ИзДeВкА над текстом (reply)
-
-Нейросети:
 .ai вопрос - Mistral AI
 .draw описание - рисует картинку
-
-Инструменты:
 .trans - перевод сообщения (reply)
 .qr ссылка - генератор QR-кода
 .save - сохранить в Избранное (reply)
-
-Модерация:
 .mute N - мут на N минут (reply)
 .unmute - снять мут (reply)
 .warn N - лимит сообщений (reply)
 .unwarn - снять лимит (reply)
-
-Очистка:
 .panic - очистить историю
 .del N - удалить чат через N сек
-
 .help - меню в чате
-.setup - сменить ключ
+.setup - сменить Mistral ключ
 
-Получить Mistral ключ:
-console.mistral.ai -> API Keys
+[u]Важно:[/u]
+- Отключите облачный пароль Telegram
+- API ключи хранятся локально
+- EXE может ругаться антивирусом
 """,
-            font_size=sp(12), size_hint=(1, None), halign='left', valign='top', color=GRAY
+            font_size=sp(12), size_hint=(1, None), halign='left', valign='top', color=GRAY, markup=True
         )
         help_text.bind(texture_size=help_text.setter('size'))
         scroll.add_widget(help_text)
@@ -184,6 +181,57 @@ console.mistral.ai -> API Keys
         btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'welcome'))
         layout.add_widget(btn)
         self.add_widget(layout)
+
+class ApiScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(12))
+        layout.add_widget(Label(text="[b]API данные[/b]", font_size=sp(22), size_hint=(1, 0.08), markup=True, color=WHITE))
+        layout.add_widget(Label(text="my.telegram.org -> API Development\nОставьте пустым для общих ключей", font_size=sp(11), size_hint=(1, 0.1), color=GRAY))
+        
+        self.api_id_input = TextInput(hint_text="API ID (число)", font_size=sp(16), size_hint=(1, 0.08), multiline=False, input_filter='int')
+        layout.add_widget(self.api_id_input)
+        
+        self.api_hash_input = TextInput(hint_text="API Hash", font_size=sp(16), size_hint=(1, 0.08), multiline=False)
+        layout.add_widget(self.api_hash_input)
+        
+        self.status_label = Label(text="", font_size=sp(11), size_hint=(1, 0.04), color=GRAY)
+        layout.add_widget(self.status_label)
+        
+        btn_box = BoxLayout(size_hint=(1, 0.1), spacing=dp(10))
+        back_btn = Button(text="НАЗАД", background_color=GRAY, font_size=sp(14), color=WHITE)
+        back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'welcome'))
+        btn_box.add_widget(back_btn)
+        
+        skip_btn = Button(text="ПРОПУСТИТЬ", background_color=GRAY, font_size=sp(14), color=WHITE)
+        skip_btn.bind(on_press=self.skip)
+        btn_box.add_widget(skip_btn)
+        
+        save_btn = Button(text="ДАЛЕЕ", background_color=BLUE, font_size=sp(14), color=WHITE)
+        save_btn.bind(on_press=self.save_api)
+        btn_box.add_widget(save_btn)
+        layout.add_widget(btn_box)
+        layout.add_widget(Label(size_hint=(1, 0.45)))
+        self.add_widget(layout)
+    
+    def skip(self, instance):
+        self.manager.current = 'phone'
+    
+    def save_api(self, instance):
+        api_id = self.api_id_input.text.strip()
+        api_hash = self.api_hash_input.text.strip()
+        app = App.get_running_app()
+        if api_id and api_hash:
+            try:
+                app.api_id = int(api_id)
+                app.api_hash = api_hash
+                self.status_label.text = "Свои ключи сохранены"
+            except:
+                self.status_label.text = "Ошибка: API ID должен быть числом"
+                return
+        else:
+            self.status_label.text = "Используются общие ключи"
+        self.manager.current = 'phone'
 
 class PhoneScreen(Screen):
     code_hash = ""
@@ -211,7 +259,7 @@ class PhoneScreen(Screen):
         
         btn_box = BoxLayout(size_hint=(1, 0.1), spacing=dp(10))
         back_btn = Button(text="НАЗАД", background_color=GRAY, font_size=sp(14), color=WHITE)
-        back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'welcome'))
+        back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'api'))
         btn_box.add_widget(back_btn)
         
         self.next_btn = Button(text="ОТПРАВИТЬ КОД", background_color=BLUE, font_size=sp(14), color=WHITE)
@@ -230,7 +278,9 @@ class PhoneScreen(Screen):
             return
         
         phone = code + number
-        App.get_running_app().phone = phone
+        app = App.get_running_app()
+        app.phone = phone
+        
         self.next_btn.disabled = True
         self.next_btn.text = "Отправляю..."
         self.status_label.text = "Отправляю код..."
@@ -245,7 +295,8 @@ class PhoneScreen(Screen):
         def do_send():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            ok, data = loop.run_until_complete(send_code_async(phone))
+            app = App.get_running_app()
+            ok, data = loop.run_until_complete(send_code_async(phone, app.api_id, app.api_hash))
             loop.close()
             on_result(ok, data)
         
@@ -322,7 +373,8 @@ class CodeScreen(Screen):
         def do_verify():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            ok, data = loop.run_until_complete(verify_code_async(phone, code, code_hash))
+            app = App.get_running_app()
+            ok, data = loop.run_until_complete(verify_code_async(phone, code, code_hash, password, app.api_id, app.api_hash))
             loop.close()
             on_result(ok, data)
         
@@ -332,7 +384,6 @@ class CodeScreen(Screen):
         self.verify_btn.disabled = False
         self.verify_btn.text = "ПОДТВЕРДИТЬ"
         self.status_label.text = "Введите облачный пароль"
-        self.password_input.focus = True
     
     def go_mistral(self):
         self.verify_btn.disabled = False
@@ -389,6 +440,8 @@ class RunningScreen(Screen):
     def on_enter(self):
         app = App.get_running_app()
         config = {
+            "api_id": app.api_id,
+            "api_hash": app.api_hash,
             "phone": app.phone,
             "code": app.code,
             "password": app.password,
@@ -417,6 +470,8 @@ class UserbotApp(App):
     password = ""
     code_hash = ""
     mistral_key = ""
+    api_id = 2040
+    api_hash = "b18441a1ff607e10a989891a5462e627"
     
     def build(self):
         self.title = "UserBot"
@@ -424,6 +479,7 @@ class UserbotApp(App):
         sm.add_widget(SplashScreen(name='splash'))
         sm.add_widget(WelcomeScreen(name='welcome'))
         sm.add_widget(HelpScreen(name='help_screen'))
+        sm.add_widget(ApiScreen(name='api'))
         sm.add_widget(PhoneScreen(name='phone'))
         sm.add_widget(CodeScreen(name='code'))
         sm.add_widget(MistralScreen(name='mistral'))
