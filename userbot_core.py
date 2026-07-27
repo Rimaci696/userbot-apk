@@ -137,11 +137,10 @@ async def unmute_cmd(event):
         return
     target = await event.get_reply_message()
     user_id = target.sender_id
-    user_name = target.sender.first_name or "Пользователь"
     if user_id in muted_users:
         del muted_users[user_id]
     await event.delete()
-    await event.respond(f"🔊 Мут снят.")
+    await event.respond("🔊 Мут снят.")
 
 # === .panic ===
 @client.on(events.NewMessage(pattern=r'\.panic'))
@@ -199,8 +198,7 @@ async def warn_cmd(event):
     limit = min(int(event.pattern_match.group(1)), 100)
     target = await event.get_reply_message()
     user_id = target.sender_id
-    user_name = target.sender.first_name or "Пользователь"
-    msg = await event.respond(f"⚠️ {user_name} — предупреждение [0/{limit}]")
+    msg = await event.respond(f"⚠️ Предупреждение [0/{limit}]")
     warn_limits[user_id] = {"limit": limit, "count": 0, "msg_id": msg.id}
     await event.delete()
 
@@ -385,8 +383,7 @@ async def check_restrictions(event):
         w["count"] += 1
         try:
             old_msg = await event.client.get_messages(event.chat_id, ids=w["msg_id"])
-            user_name = event.sender.first_name or "Пользователь"
-            await old_msg.edit(f"⚠️ {user_name} — предупреждение [{w['count']}/{w['limit']}]")
+            await old_msg.edit(f"⚠️ Предупреждение [{w['count']}/{w['limit']}]")
         except: pass
         if w["count"] >= w["limit"]:
             muted_users[event.sender_id] = datetime.now() + timedelta(hours=1)
@@ -400,19 +397,18 @@ async def check_restrictions(event):
 async def main():
     log("Запуск бота...")
     
+    code_from_app = CODE
+    
+    async def code_callback():
+        return code_from_app
+    
     try:
-        await client.connect()
-        
-        if not await client.is_user_authorized():
-            log("Отправляю код...")
-            await client.send_code_request(PHONE)
-            log(f"Код отправлен на {PHONE}")
-            await client.sign_in(phone=PHONE, code=CODE)
-            log("Вход по коду выполнен!")
+        await client.start(phone=PHONE, code_callback=code_callback)
+        log("Вход выполнен!")
     except errors.SessionPasswordNeededError:
         log("Нужен облачный пароль, вхожу...")
         await client.sign_in(password=PASSWORD)
-        log("Вход по паролю выполнен!")
+        log("Вход по паролю!")
     except Exception as e:
         log(f"Ошибка входа: {e}")
         sys.exit(1)
