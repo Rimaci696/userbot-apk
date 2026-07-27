@@ -14,6 +14,7 @@ permissions = INTERNET,FOREGROUND_SERVICE
 api = 33
 minapi = 24
 android.ndk = 25b
+p4a.branch = develop
 
 [buildozer]
 log_level = 2
