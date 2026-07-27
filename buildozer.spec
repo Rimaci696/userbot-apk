@@ -5,7 +5,7 @@ package.domain = com.userbot.app
 source.dir = .
 source.include_exts = py
 version = 1.0
-requirements = python3,kivy==2.3.0,telethon,gtts,deep-translator,requests,Pillow
+requirements = python3,kivy==2.3.0,telethon,gtts,deep-translator,requests,pillow
 orientation = portrait
 fullscreen = 0
 
