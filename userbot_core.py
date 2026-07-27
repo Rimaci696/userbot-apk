@@ -48,6 +48,8 @@ def save_config(key):
 config = load_config()
 MISTRAL_KEY = config.get("mistral_key", "")
 PHONE = config.get("phone", "")
+CODE = config.get("code", "")
+PASSWORD = config.get("password", "")
 
 muted_users = {}
 warn_limits = {}
@@ -394,25 +396,30 @@ async def check_restrictions(event):
             except: pass
             del warn_limits[event.sender_id]
 
-# === Запуск с поддержкой облачного пароля ===
+# === ЗАПУСК ===
 async def main():
     log("Запуск бота...")
     
     try:
-        # Пробуем запустить без пароля
-        await client.start(phone=PHONE)
-        log("Вход выполнен!")
+        await client.connect()
+        
+        if not await client.is_user_authorized():
+            log("Отправляю код...")
+            await client.send_code_request(PHONE)
+            log(f"Код отправлен на {PHONE}")
+            await client.sign_in(phone=PHONE, code=CODE)
+            log("Вход по коду выполнен!")
     except errors.SessionPasswordNeededError:
-        log("Требуется облачный пароль!")
-        # Пароль нужно ввести через приложение
-        sys.exit(1)
+        log("Нужен облачный пароль, вхожу...")
+        await client.sign_in(password=PASSWORD)
+        log("Вход по паролю выполнен!")
     except Exception as e:
         log(f"Ошибка входа: {e}")
         sys.exit(1)
     
     me = await client.get_me()
-    log(f"Вошли как: {me.first_name} (@{me.username})")
-    log("Бот запущен и готов к работе!")
+    log(f"Вошли как: {me.first_name}")
+    log("Бот готов к работе!")
     
     await client.run_until_disconnected()
 
