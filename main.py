@@ -208,9 +208,16 @@ class PhoneScreen(Screen):
         self.status_label = Label(text="", font_size=sp(12), size_hint=(1, 0.04), color=RED)
         layout.add_widget(self.status_label)
         
-        btn = Button(text="ДАЛЕЕ", size_hint=(1, 0.1), background_color=BLUE, font_size=sp(16), color=WHITE)
-        btn.bind(on_press=self.save_phone)
-        layout.add_widget(btn)
+        btn_box = BoxLayout(size_hint=(1, 0.1), spacing=dp(10))
+        back_btn = Button(text="НАЗАД", background_color=GRAY, font_size=sp(14), color=WHITE)
+        back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'welcome'))
+        btn_box.add_widget(back_btn)
+        
+        next_btn = Button(text="ДАЛЕЕ", background_color=BLUE, font_size=sp(14), color=WHITE)
+        next_btn.bind(on_press=self.save_phone)
+        btn_box.add_widget(next_btn)
+        layout.add_widget(btn_box)
+        
         layout.add_widget(Label(size_hint=(1, 0.45)))
         self.add_widget(layout)
     
@@ -222,7 +229,7 @@ class PhoneScreen(Screen):
             self.manager.current = 'code'
         else:
             self.status_label.text = "Введите корректный номер"
-
+            
 class CodeScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -233,9 +240,17 @@ class CodeScreen(Screen):
         layout.add_widget(self.code_input)
         self.status_label = Label(text="", font_size=sp(12), size_hint=(1, 0.04), color=RED)
         layout.add_widget(self.status_label)
-        btn = Button(text="ПОДТВЕРДИТЬ", size_hint=(1, 0.1), background_color=BLUE, font_size=sp(16), color=WHITE)
-        btn.bind(on_press=self.save_code)
-        layout.add_widget(btn)
+        
+        btn_box = BoxLayout(size_hint=(1, 0.1), spacing=dp(10))
+        back_btn = Button(text="НАЗАД", background_color=GRAY, font_size=sp(14), color=WHITE)
+        back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'phone'))
+        btn_box.add_widget(back_btn)
+        
+        next_btn = Button(text="ПОДТВЕРДИТЬ", background_color=BLUE, font_size=sp(14), color=WHITE)
+        next_btn.bind(on_press=self.save_code)
+        btn_box.add_widget(next_btn)
+        layout.add_widget(btn_box)
+        
         layout.add_widget(Label(size_hint=(1, 0.45)))
         self.add_widget(layout)
     
@@ -259,13 +274,19 @@ class MistralScreen(Screen):
         layout.add_widget(self.status_label)
         
         btn_box = BoxLayout(size_hint=(1, 0.1), spacing=dp(10))
+        back_btn = Button(text="НАЗАД", background_color=GRAY, font_size=sp(14), color=WHITE)
+        back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'code'))
+        btn_box.add_widget(back_btn)
+        
         skip_btn = Button(text="ПРОПУСТИТЬ", background_color=GRAY, font_size=sp(14), color=WHITE)
         skip_btn.bind(on_press=self.skip)
         btn_box.add_widget(skip_btn)
+        
         save_btn = Button(text="СОХРАНИТЬ", background_color=GREEN, font_size=sp(14), color=WHITE)
         save_btn.bind(on_press=self.save_key)
         btn_box.add_widget(save_btn)
         layout.add_widget(btn_box)
+        
         layout.add_widget(Label(size_hint=(1, 0.45)))
         self.add_widget(layout)
     
