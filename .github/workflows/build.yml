@@ -13,6 +13,11 @@ jobs:
           sudo apt update
           sudo apt install -y python3-pip openjdk-17-jdk zip unzip autoconf libtool automake m4
           pip install buildozer cython
+      - name: Set Java 17
+        run: |
+          sudo update-alternatives --set java /usr/lib/jvm/temurin-17-jdk-amd64/bin/java
+          export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
+          echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
       - name: Install NDK 25b
         run: |
           mkdir -p /home/runner/.buildozer/android/platform
