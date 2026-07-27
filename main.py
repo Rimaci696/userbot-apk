@@ -185,15 +185,14 @@ class PhoneScreen(Screen):
         self.add_widget(layout)
     
     def save_phone(self, instance):
-        code = self.spinner.text.split(" ")[0]
-        number = self.phone_input.text.strip()
-        if number and len(number) > 3:
-            phone = code + number
-            App.get_running_app().phone = phone
-            self.status_label.text = "Отправляю код..."
-            threading.Thread(target=self.send_code, args=(phone,), daemon=True).start()
-        else:
-            self.status_label.text = "Введите корректный номер"
+    code = self.spinner.text.split(" ")[0]
+    number = self.phone_input.text.strip()
+    if number and len(number) > 3:
+        phone = code + number
+        App.get_running_app().phone = phone
+        self.manager.current = 'code'
+    else:
+        self.status_label.text = "Введите корректный номер"
     
     def send_code(self, phone):
         try:
