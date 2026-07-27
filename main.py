@@ -3,6 +3,7 @@ import json
 import threading
 import sys
 import subprocess
+import asyncio
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.boxlayout import BoxLayout
@@ -18,6 +19,8 @@ from kivy.utils import get_color_from_hex
 Window.fullscreen = 'auto'
 
 CONFIG_PATH = "/storage/emulated/0/userbot_config.json"
+API_ID = 2040
+API_HASH = "b18441a1ff607e10a989891a5462e627"
 
 GREEN = get_color_from_hex('#2ECC71')
 BLUE = get_color_from_hex('#3498DB')
@@ -27,14 +30,60 @@ DARK = get_color_from_hex('#1a1a2e')
 RED = get_color_from_hex('#E74C3C')
 YELLOW = get_color_from_hex('#F39C12')
 
+# Глобальный клиент для отправки/проверки кода
+telethon_client = None
+
+def run_async(func, *args):
+    """Запускает асинхронную функцию в отдельном потоке"""
+    def wrapper():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(func(*args))
+        loop.close()
+    threading.Thread(target=wrapper, daemon=True).start()
+
+async def send_code_async(phone):
+    """Отправляет код на номер"""
+    from telethon import TelegramClient
+    client = TelegramClient('/storage/emulated/0/temp_session', API_ID, API_HASH)
+    await client.connect()
+    try:
+        result = await client.send_code_request(phone)
+        await client.disconnect()
+        return True, str(result.phone_code_hash)
+    except Exception as e:
+        await client.disconnect()
+        return False, str(e)
+
+async def verify_code_async(phone, code, code_hash):
+    """Проверяет код"""
+    from telethon import TelegramClient, errors
+    client = TelegramClient('/storage/emulated/0/userbot_session', API_ID, API_HASH)
+    await client.connect()
+    try:
+        await client.sign_in(phone=phone, code=code, phone_code_hash=code_hash)
+        await client.disconnect()
+        return True, "OK"
+    except errors.SessionPasswordNeededError:
+        await client.disconnect()
+        return True, "PASSWORD"
+    except errors.PhoneCodeInvalidError:
+        await client.disconnect()
+        return False, "Неверный код"
+    except errors.PhoneCodeExpiredError:
+        await client.disconnect()
+        return False, "Код истёк"
+    except Exception as e:
+        await client.disconnect()
+        return False, str(e)
+
 class SplashScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(30), spacing=dp(15))
         layout.add_widget(Label(text="[b]USERBOT[/b]", font_size=sp(40), markup=True, color=WHITE))
-        layout.add_widget(Label(text="Многофункциональный бот\nдля Telegram", font_size=sp(16), color=GRAY, halign='center'))
+        layout.add_widget(Label(text="Многофункциональный бот\nдля Telegram", font_size=sp(16), color=GRAY))
         layout.add_widget(Label(text="Загрузка...", font_size=sp(14), color=YELLOW))
-        layout.add_widget(Label(size_hint=(1, 0.3)))
         self.add_widget(layout)
     
     def on_enter(self):
@@ -42,9 +91,12 @@ class SplashScreen(Screen):
     
     def check_and_go(self):
         if os.path.exists(CONFIG_PATH):
-            Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'running'), 1)
-        else:
-            Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'welcome'), 1)
+            with open(CONFIG_PATH) as f:
+                config = json.load(f)
+            if config.get("logged_in"):
+                self.manager.current = 'running'
+                return
+        self.manager.current = 'welcome'
 
 class WelcomeScreen(Screen):
     def __init__(self, **kwargs):
@@ -56,7 +108,6 @@ class WelcomeScreen(Screen):
         info = Label(
             text="""
 Что умеет бот:
-
 - Анимированная печать
 - Голосовые сообщения
 - Нейросеть Mistral AI
@@ -67,8 +118,7 @@ class WelcomeScreen(Screen):
 - Модерация чатов
 
 Нужен Mistral ключ:
-console.mistral.ai
-(Можно пропустить)
+console.mistral.ai (можно пропустить)
 """,
             font_size=sp(13), size_hint=(1, None), halign='left', valign='top', color=GRAY
         )
@@ -77,15 +127,12 @@ console.mistral.ai
         layout.add_widget(scroll)
         
         btn_box = BoxLayout(size_hint=(1, 0.12), spacing=dp(10))
-        
         help_btn = Button(text="ПОМОЩЬ", background_color=GRAY, font_size=sp(14), color=WHITE)
         help_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'help_screen'))
         btn_box.add_widget(help_btn)
-        
         start_btn = Button(text="НАЧАТЬ", background_color=GREEN, font_size=sp(14), color=WHITE)
         start_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'phone'))
         btn_box.add_widget(start_btn)
-        
         layout.add_widget(btn_box)
         self.add_widget(layout)
 
@@ -94,7 +141,6 @@ class HelpScreen(Screen):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(8))
         layout.add_widget(Label(text="[b]СПРАВКА[/b]", font_size=sp(22), size_hint=(1, 0.08), markup=True, color=WHITE))
-        
         scroll = ScrollView(size_hint=(1, 0.8))
         help_text = Label(
             text="""
@@ -123,32 +169,25 @@ class HelpScreen(Screen):
 .panic - очистить историю
 .del N - удалить чат через N сек
 
-.help - это меню в чате
-.setup - сменить Mistral ключ
+.help - меню в чате
+.setup - сменить ключ
 
 Получить Mistral ключ:
-1. console.mistral.ai
-2. Зарегистрироваться
-3. API Keys -> Create key
-4. Скопировать ключ
-
-Важно:
-- Отключите облачный пароль Telegram
-- EXE может ругаться антивирусом
-- Код открыт на GitHub
+console.mistral.ai -> API Keys
 """,
             font_size=sp(12), size_hint=(1, None), halign='left', valign='top', color=GRAY
         )
         help_text.bind(texture_size=help_text.setter('size'))
         scroll.add_widget(help_text)
         layout.add_widget(scroll)
-        
         btn = Button(text="НАЗАД", size_hint=(1, 0.08), background_color=BLUE, font_size=sp(14), color=WHITE)
         btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'welcome'))
         layout.add_widget(btn)
         self.add_widget(layout)
 
 class PhoneScreen(Screen):
+    code_hash = ""
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(12))
@@ -175,31 +214,61 @@ class PhoneScreen(Screen):
         back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'welcome'))
         btn_box.add_widget(back_btn)
         
-        next_btn = Button(text="ДАЛЕЕ", background_color=BLUE, font_size=sp(14), color=WHITE)
-        next_btn.bind(on_press=self.save_phone)
-        btn_box.add_widget(next_btn)
+        self.next_btn = Button(text="ОТПРАВИТЬ КОД", background_color=BLUE, font_size=sp(14), color=WHITE)
+        self.next_btn.bind(on_press=self.send_code)
+        btn_box.add_widget(self.next_btn)
         layout.add_widget(btn_box)
         
         layout.add_widget(Label(size_hint=(1, 0.45)))
         self.add_widget(layout)
     
-    def save_phone(self, instance):
+    def send_code(self, instance):
         code = self.spinner.text.split(" ")[0]
         number = self.phone_input.text.strip()
-        if number and len(number) > 3:
-            phone = code + number
-            App.get_running_app().phone = phone
-            self.manager.current = 'code'
-        else:
+        if not number or len(number) < 4:
             self.status_label.text = "Введите корректный номер"
+            return
+        
+        phone = code + number
+        App.get_running_app().phone = phone
+        self.next_btn.disabled = True
+        self.next_btn.text = "Отправляю..."
+        self.status_label.text = "Отправляю код..."
+        
+        def on_result(success, result):
+            if success:
+                self.code_hash = result
+                Clock.schedule_once(lambda dt: self.go_to_code(), 0)
+            else:
+                Clock.schedule_once(lambda dt: self.show_error(result), 0)
+        
+        def do_send():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            ok, data = loop.run_until_complete(send_code_async(phone))
+            loop.close()
+            on_result(ok, data)
+        
+        threading.Thread(target=do_send, daemon=True).start()
+    
+    def go_to_code(self):
+        self.next_btn.disabled = False
+        self.next_btn.text = "ОТПРАВИТЬ КОД"
+        self.status_label.text = "Код отправлен!"
+        self.manager.current = 'code'
+    
+    def show_error(self, error):
+        self.next_btn.disabled = False
+        self.next_btn.text = "ОТПРАВИТЬ КОД"
+        self.status_label.text = f"Ошибка: {error}"
 
 class CodeScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(12))
-        layout.add_widget(Label(text="[b]Код из Telegram[/b]", font_size=sp(22), size_hint=(1, 0.08), markup=True, color=WHITE))
-        layout.add_widget(Label(text="Код придёт после запуска бота", font_size=sp(12), size_hint=(1, 0.05), color=GRAY))
-        self.code_input = TextInput(hint_text="Введите код", font_size=sp(24), size_hint=(1, 0.08), multiline=False)
+        layout.add_widget(Label(text="[b]Код подтверждения[/b]", font_size=sp(22), size_hint=(1, 0.08), markup=True, color=WHITE))
+        layout.add_widget(Label(text="Введите код из Telegram", font_size=sp(12), size_hint=(1, 0.05), color=GRAY))
+        self.code_input = TextInput(hint_text="12345", font_size=sp(24), size_hint=(1, 0.08), multiline=False)
         layout.add_widget(self.code_input)
         
         self.password_input = TextInput(hint_text="Облачный пароль (если есть)", font_size=sp(16), size_hint=(1, 0.08), multiline=False)
@@ -213,24 +282,67 @@ class CodeScreen(Screen):
         back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'phone'))
         btn_box.add_widget(back_btn)
         
-        next_btn = Button(text="ПОДТВЕРДИТЬ", background_color=BLUE, font_size=sp(14), color=WHITE)
-        next_btn.bind(on_press=self.save_code)
-        btn_box.add_widget(next_btn)
+        self.verify_btn = Button(text="ПОДТВЕРДИТЬ", background_color=BLUE, font_size=sp(14), color=WHITE)
+        self.verify_btn.bind(on_press=self.verify_code)
+        btn_box.add_widget(self.verify_btn)
         layout.add_widget(btn_box)
         
         layout.add_widget(Label(size_hint=(1, 0.45)))
         self.add_widget(layout)
     
-    def save_code(self, instance):
+    def verify_code(self, instance):
         code = self.code_input.text.strip()
         password = self.password_input.text.strip()
-        if code:
-            app = App.get_running_app()
-            app.code = code
-            app.password = password
-            self.manager.current = 'mistral'
-        else:
+        
+        if not code:
             self.status_label.text = "Введите код"
+            return
+        
+        app = App.get_running_app()
+        phone = app.phone
+        phone_screen = self.manager.get_screen('phone')
+        code_hash = phone_screen.code_hash
+        
+        self.verify_btn.disabled = True
+        self.verify_btn.text = "Проверяю..."
+        self.status_label.text = "Проверяю код..."
+        
+        def on_result(success, result):
+            if success:
+                if result == "PASSWORD":
+                    Clock.schedule_once(lambda dt: self.need_password(), 0)
+                else:
+                    app.code = code
+                    app.password = password
+                    app.code_hash = code_hash
+                    Clock.schedule_once(lambda dt: self.go_mistral(), 0)
+            else:
+                Clock.schedule_once(lambda dt: self.show_error(result), 0)
+        
+        def do_verify():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            ok, data = loop.run_until_complete(verify_code_async(phone, code, code_hash))
+            loop.close()
+            on_result(ok, data)
+        
+        threading.Thread(target=do_verify, daemon=True).start()
+    
+    def need_password(self):
+        self.verify_btn.disabled = False
+        self.verify_btn.text = "ПОДТВЕРДИТЬ"
+        self.status_label.text = "Введите облачный пароль"
+        self.password_input.focus = True
+    
+    def go_mistral(self):
+        self.verify_btn.disabled = False
+        self.verify_btn.text = "ПОДТВЕРДИТЬ"
+        self.manager.current = 'mistral'
+    
+    def show_error(self, error):
+        self.verify_btn.disabled = False
+        self.verify_btn.text = "ПОДТВЕРДИТЬ"
+        self.status_label.text = f"Ошибка: {error}"
 
 class MistralScreen(Screen):
     def __init__(self, **kwargs):
@@ -245,16 +357,13 @@ class MistralScreen(Screen):
         back_btn = Button(text="НАЗАД", background_color=GRAY, font_size=sp(14), color=WHITE)
         back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'code'))
         btn_box.add_widget(back_btn)
-        
         skip_btn = Button(text="ПРОПУСТИТЬ", background_color=GRAY, font_size=sp(14), color=WHITE)
         skip_btn.bind(on_press=self.skip)
         btn_box.add_widget(skip_btn)
-        
         save_btn = Button(text="СОХРАНИТЬ", background_color=GREEN, font_size=sp(14), color=WHITE)
         save_btn.bind(on_press=self.save_key)
         btn_box.add_widget(save_btn)
         layout.add_widget(btn_box)
-        
         layout.add_widget(Label(size_hint=(1, 0.45)))
         self.add_widget(layout)
     
@@ -264,7 +373,7 @@ class MistralScreen(Screen):
     
     def save_key(self, instance):
         App.get_running_app().mistral_key = self.key_input.text.strip()
-        Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'running'), 0.5)
+        self.manager.current = 'running'
 
 class RunningScreen(Screen):
     def __init__(self, **kwargs):
@@ -279,7 +388,14 @@ class RunningScreen(Screen):
     
     def on_enter(self):
         app = App.get_running_app()
-        config = {"phone": app.phone, "code": app.code, "password": app.password, "mistral_key": app.mistral_key}
+        config = {
+            "phone": app.phone,
+            "code": app.code,
+            "password": app.password,
+            "code_hash": app.code_hash,
+            "mistral_key": app.mistral_key,
+            "logged_in": True
+        }
         with open(CONFIG_PATH, "w") as f:
             json.dump(config, f)
         self.status_label.text = "Запускаю бота..."
@@ -299,6 +415,7 @@ class UserbotApp(App):
     phone = ""
     code = ""
     password = ""
+    code_hash = ""
     mistral_key = ""
     
     def build(self):
