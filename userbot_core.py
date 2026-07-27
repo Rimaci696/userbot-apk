@@ -10,8 +10,6 @@ from telethon import TelegramClient, events, errors
 from telethon.tl.functions.messages import DeleteHistoryRequest
 from gtts import gTTS
 
-API_ID = 2040
-API_HASH = "b18441a1ff607e10a989891a5462e627"
 CONFIG_PATH = "/storage/emulated/0/userbot_config.json"
 LOG_PATH = "/storage/emulated/0/userbot_log.txt"
 
@@ -36,6 +34,8 @@ if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH) as f:
         config = json.load(f)
 
+API_ID = config.get("api_id", 2040)
+API_HASH = config.get("api_hash", "b18441a1ff607e10a989891a5462e627")
 MISTRAL_KEY = config.get("mistral_key", "")
 PHONE = config.get("phone", "")
 PASSWORD = config.get("password", "")
