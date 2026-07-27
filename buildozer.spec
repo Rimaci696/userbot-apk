@@ -5,7 +5,7 @@ package.domain = com.userbot.app
 source.dir = .
 source.include_exts = py
 version = 1.0
-requirements = python3,kivy==2.3.0,telethon,gtts,deep-translator,requests,pillow
+requirements = python3,kivy,telethon,gtts,deep-translator,requests,pillow
 orientation = portrait
 fullscreen = 0
 
@@ -14,7 +14,7 @@ permissions = INTERNET,FOREGROUND_SERVICE
 api = 33
 minapi = 24
 android.ndk = 25b
-p4a.branch = develop
+android.ndk_path = /home/runner/.buildozer/android/platform/android-ndk-r25b
 
 [buildozer]
 log_level = 2
